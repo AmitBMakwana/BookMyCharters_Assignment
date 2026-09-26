@@ -1,4 +1,5 @@
 /assignment-1-cache-service/vendor/
 /assignment-1-cache-service/runtime/
 *.log
+!assignment-2-incident/*.log
 .DS_Store
