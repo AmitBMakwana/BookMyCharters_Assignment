@@ -9,6 +9,7 @@ use yii\web\Controller;
 use yii\web\NotFoundHttpException;
 use app\models\Category;
 use app\models\Product;
+use app\services\CacheService;
 
 /**
  * Categories API.
@@ -17,12 +18,6 @@ class CategoryController extends Controller
 {
     public $enableCsrfValidation = false;
 
-    /**
-     * GET /categories/{id}/products
-     *
-     * Returns the products in a category, served from cache when available,
-     * otherwise loaded from the database and cached for next time.
-     */
     public function actionProducts(int $id): array
     {
         $category = Category::findOne($id);
@@ -30,10 +25,10 @@ class CategoryController extends Controller
             throw new NotFoundHttpException('Category not found.');
         }
 
-        $cache = Yii::$app->cache;
-        $key = 'category:' . $id . ':products';
+        $cacheService = new CacheService(Yii::$app->cache);
+        $key = $cacheService->categoryProductsKey($id);
 
-        $data = $cache->get($key);
+        $data = $cacheService->get($key);
         if ($data !== false) {
             return $data;
         }
@@ -44,7 +39,7 @@ class CategoryController extends Controller
             ->all();
 
         $data = array_map(static fn(Product $p): array => $p->toArray(), $products);
-        $cache->set($key, $data);
+        $cacheService->set($key, $data);
 
         return $data;
     }

@@ -8,27 +8,19 @@ use Yii;
 use yii\web\Controller;
 use yii\web\NotFoundHttpException;
 use app\models\Product;
+use app\services\CacheService;
 
 /**
  * Products API.
- *
- * Caching is wired directly into the actions using Yii::$app->cache (FileCache).
- * This is deliberately simple and is expected to evolve.
  */
 class ProductController extends Controller
 {
     public $enableCsrfValidation = false;
 
-    /**
-     * GET /products/{id}
-     *
-     * Returns the product, served from cache when a cached copy exists,
-     * otherwise loaded from the database and cached for next time.
-     */
     public function actionView(int $id): array
     {
-        $cache = Yii::$app->cache;
-        $key = 'product:' . $id;
+        $cache = new CacheService(Yii::$app->cache);
+        $key = $cache->productKey($id);
 
         $data = $cache->get($key);
         if ($data !== false) {
@@ -46,18 +38,14 @@ class ProductController extends Controller
         return $data;
     }
 
-    /**
-     * PUT /products/{id}
-     *
-     * Updates the product and refreshes its cached copy so that the next
-     * GET /products/{id} reflects the change.
-     */
     public function actionUpdate(int $id): array
     {
         $product = Product::findOne($id);
         if ($product === null) {
             throw new NotFoundHttpException('Product not found.');
         }
+
+        $oldCategoryId = (int) $product->category_id;
 
         $product->load(Yii::$app->request->getBodyParams(), '');
 
@@ -66,8 +54,21 @@ class ProductController extends Controller
             return ['errors' => $product->getErrors()];
         }
 
-        // Refresh this product's cached copy.
-        Yii::$app->cache->delete('product:' . $id);
+        $newCategoryId = (int) $product->category_id;
+
+        $cacheService = new CacheService(Yii::$app->cache);
+        $cacheService->invalidateEntity(
+            'product',
+            $id,
+            [
+                'categoryIds' => array_values(
+                    array_unique([
+                        $oldCategoryId,
+                        $newCategoryId,
+                    ])
+                ),
+            ]
+        );
 
         return $product->toArray();
     }
